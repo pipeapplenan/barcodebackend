@@ -20,12 +20,16 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
 // 处理前端条形码验证的 POST 请求
 app.post("/api/validate-barcode", (req, res) => {
-  const { barcode } = req.body;
+  const { customerId, poNumber, itemCode, serialNumber } = req.body;
 
   // 从 SQLite 数据库中查询条形码区间
   db.get(
-    "SELECT * FROM barcodes WHERE ? BETWEEN barcode_start AND barcode_end",
-    [barcode],
+    `SELECT * FROM barcodes 
+    WHERE customer_id = ? COLLATE NOCASE
+    AND po_number = ? COLLATE NOCASE
+    AND item_code = ? COLLATE NOCASE
+    AND ? BETWEEN series_number_start AND series_number_end`,
+    [customerId, poNumber, itemCode, serialNumber],
     (err, row) => {
       if (err) {
         console.error("Error querying database", err.message);

@@ -34,7 +34,14 @@ db.serialize(() => {
 
   // 创建新的 barcodes 表
   db.run(
-    "CREATE TABLE IF NOT EXISTS barcodes (barcode_start INTEGER, barcode_end INTEGER, item_info TEXT)",
+    `CREATE TABLE IF NOT EXISTS barcodes (
+      customer_id TEXT, 
+      po_number TEXT, 
+      item_code TEXT, 
+      series_number_start INTEGER, 
+      series_number_end INTEGER, 
+      item_info TEXT
+    )`,
     (err) => {
       if (err) {
         console.error("Error creating table:", err.message);
@@ -43,21 +50,26 @@ db.serialize(() => {
 
         // 准备插入数据的语句
         const stmt = db.prepare(
-          "INSERT INTO barcodes (barcode_start, barcode_end, item_info) VALUES (?, ?, ?)"
+          `INSERT INTO barcodes 
+           (customer_id, po_number, item_code, series_number_start, series_number_end, item_info) 
+           VALUES (?, ?, ?, ?, ?, ?)`
         );
 
         // 遍历 Excel 文件中的每一行并插入到数据库中
         barcodes.forEach((barcode) => {
           stmt.run(
-            parseInt(barcode.barcode_start, 10),
-            parseInt(barcode.barcode_end, 10),
-            barcode.item_info,
+            barcode["Customer ID"],
+            barcode["PO Number"],
+            barcode["Item Code"],
+            barcode["Series Number Start"], // 不需要转换为整数，直接使用文本
+            barcode["Series Number End"],
+            barcode["Item Info"],
             (err) => {
               if (err) {
                 console.error("Error inserting data:", err.message);
               } else {
                 console.log(
-                  `Inserted barcode range (${barcode.barcode_start} - ${barcode.barcode_end}) into 'barcodes' table.`
+                  `Inserted barcode range (${barcode["Series Number Start"]} - ${barcode["Series Number End"]}) into 'barcodes' table.`
                 );
               }
             }
