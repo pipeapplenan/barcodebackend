@@ -57,17 +57,17 @@ db.serialize(() => {
 
         // 遍历 Excel 文件中的每一行并插入到数据库中
         barcodes.forEach((barcode) => {
-          // 清理和处理数据：去掉空格，并确保前导零保留
+          // 清理和处理数据：去掉空格，并确保前导零保留，4位序列号
           const customerId = barcode["Customer ID"].trim();
           const poNumber = barcode["PO Number"].toString().trim();
           const itemCode = barcode["Item Code"].trim();
           const seriesNumberStart = barcode["Series Number Start"]
             .toString()
-            .padStart(5, "0")
+            .padStart(4, "0")
             .trim();
           const seriesNumberEnd = barcode["Series Number End"]
             .toString()
-            .padStart(5, "0")
+            .padStart(4, "0")
             .trim();
           const itemInfo = barcode["Item Info"].trim();
 

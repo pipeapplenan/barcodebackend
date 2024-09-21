@@ -29,11 +29,11 @@ app.use((req, res, next) => {
 app.post("/api/validate-barcode", (req, res) => {
   const { customerId, poNumber, itemCode, serialNumber } = req.body;
 
-  // 确保 serialNumber 是字符串，并且补齐前导零
+  // 确保 serialNumber 是字符串，并且补齐前导零为4位
   const serialNum =
-    serialNumber.length === 5
+    serialNumber.length === 4
       ? serialNumber
-      : serialNumber.toString().padStart(5, "0");
+      : serialNumber.toString().padStart(4, "0");
 
   // 打印调试信息
   console.log("Request Body: ", req.body);
