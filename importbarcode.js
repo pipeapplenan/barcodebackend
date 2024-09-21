@@ -8,7 +8,7 @@ console.log("Database path for import:", dbPath);
 
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
-    console.error("Error opening database:", err);
+    console.error("Error opening database", err);
   } else {
     console.log("Database opened successfully");
   }
@@ -38,8 +38,8 @@ db.serialize(() => {
       customer_id TEXT, 
       po_number TEXT, 
       item_code TEXT, 
-      series_number_start INTEGER, 
-      series_number_end INTEGER, 
+      series_number_start TEXT, 
+      series_number_end TEXT, 
       item_info TEXT
     )`,
     (err) => {
@@ -57,19 +57,39 @@ db.serialize(() => {
 
         // 遍历 Excel 文件中的每一行并插入到数据库中
         barcodes.forEach((barcode) => {
+          // 清理和处理数据：去掉空格，并确保前导零保留
+          const customerId = barcode["Customer ID"].trim();
+          const poNumber = barcode["PO Number"].toString().trim();
+          const itemCode = barcode["Item Code"].trim();
+          const seriesNumberStart = barcode["Series Number Start"]
+            .toString()
+            .padStart(5, "0")
+            .trim();
+          const seriesNumberEnd = barcode["Series Number End"]
+            .toString()
+            .padStart(5, "0")
+            .trim();
+          const itemInfo = barcode["Item Info"].trim();
+
+          // 打印调试信息
+          console.log(
+            `Inserting: ${customerId}, ${poNumber}, ${itemCode}, ${seriesNumberStart}, ${seriesNumberEnd}, ${itemInfo}`
+          );
+
+          // 插入到数据库中
           stmt.run(
-            barcode["Customer ID"],
-            barcode["PO Number"],
-            barcode["Item Code"],
-            barcode["Series Number Start"], // 不需要转换为整数，直接使用文本
-            barcode["Series Number End"],
-            barcode["Item Info"],
+            customerId,
+            poNumber,
+            itemCode,
+            seriesNumberStart,
+            seriesNumberEnd,
+            itemInfo,
             (err) => {
               if (err) {
                 console.error("Error inserting data:", err.message);
               } else {
                 console.log(
-                  `Inserted barcode range (${barcode["Series Number Start"]} - ${barcode["Series Number End"]}) into 'barcodes' table.`
+                  `Inserted barcode range (${seriesNumberStart} - ${seriesNumberEnd}) into 'barcodes' table.`
                 );
               }
             }
