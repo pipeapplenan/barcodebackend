@@ -109,6 +109,28 @@ app.post("/api/import-barcodes", (req, res) => {
   });
 });
 
+//查看数据库中有多少数据
+app.get("/api/barcodes", (req, res) => {
+  const dbPath = path.resolve("/tmp", "barcodes.db"); // 数据库路径
+
+  const db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+      return res.status(500).json({ message: "数据库连接错误" });
+    }
+
+    // 查询所有条形码数据
+    db.all("SELECT * FROM barcodes", (err, rows) => {
+      if (err) {
+        return res.status(500).json({ message: "数据库查询错误" });
+      }
+
+      res.status(200).json(rows); // 返回查询到的所有数据
+    });
+
+    db.close(); // 关闭数据库连接
+  });
+});
+
 // 处理前端条形码验证的 POST 请求
 app.post("/api/validate-barcode", (req, res) => {
   const { customerId, poNumber, itemCode, serialNumber } = req.body;
@@ -120,7 +142,7 @@ app.post("/api/validate-barcode", (req, res) => {
       : serialNumber.toString().padStart(4, "0");
 
   // 打开数据库连接
-  const dbPath = path.resolve(__dirname, "barcodes.db");
+  const dbPath = path.resolve("/tmp", "barcodes.db");
   const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
       console.error("Error opening database", err);
