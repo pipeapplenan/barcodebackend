@@ -13,8 +13,12 @@ app.use(
     origin: "https://pipeapplenan.github.io", // 只允许来自这个域名的跨域请求
     methods: ["GET", "POST"], // 允许的 HTTP 方法
     allowedHeaders: ["Content-Type"], // 允许的请求头
+    optionsSuccessStatus: 204, // 对于预检请求返回204状态码
   })
 );
+
+// 处理所有 OPTIONS 请求的响应
+app.options("*", cors()); // 允许所有的预检请求
 
 app.use(bodyParser.json());
 
