@@ -60,12 +60,6 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
   }
   console.log("Uploaded file:", req.file.path);
 
-  // 这里返回上传成功并返回文件路径（包括时间戳）
-  res.status(200).json({
-    message: "文件上传成功",
-    filePath: req.file.path,
-  });
-
   // 将上传文件的路径加入缓存处理
   const cacheFileName = `cache_${getTimeStamp()}.xlsx`;
   // const cacheFilePath = path.join(__dirname, "cache", cacheFileName);
@@ -87,6 +81,12 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
       .status(200)
       .json({ message: "文件上传成功并已缓存", filePath: req.file.path });
   });
+});
+
+// 这里返回上传成功并返回文件路径（包括时间戳）
+res.status(200).json({
+  message: "文件上传成功",
+  filePath: req.file.path,
 });
 
 // 导入条形码数据的 POST 请求处理
