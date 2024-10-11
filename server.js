@@ -26,7 +26,8 @@ const getTimeStamp = () => {
 // 配置 multer，将文件保存到 server 目录下
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, path.join(__dirname)); // 将文件保存到 server 目录
+    // cb(null, path.join(__dirname)); // 将文件保存到 server 目录
+    cb(null, "/tmp");
   },
   filename: function (req, file, cb) {
     // 生成带有时间戳的文件名
@@ -50,7 +51,8 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
 
   // 将上传文件的路径加入缓存处理
   const cacheFileName = `cache_${getTimeStamp()}.xlsx`;
-  const cacheFilePath = path.join(__dirname, "cache", cacheFileName);
+  // const cacheFilePath = path.join(__dirname, "cache", cacheFileName);
+  const cacheFilePath = path.join("/tmp", cacheFileName); // 保存到 /tmp
 
   // 确保缓存目录存在
   if (!fs.existsSync(path.join(__dirname, "cache"))) {
