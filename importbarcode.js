@@ -7,33 +7,35 @@ const fs = require("fs");
 const dbPath = path.resolve("/tmp", "barcodes.db");
 console.log("Database path for import:", dbPath);
 
-const importBarcodesToDatabase = (callback) => {
-  const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-      console.error("Error opening database", err);
-      return callback(err); // 错误时调用 callback
-    } else {
-      console.log("Database opened successfully");
-    }
-  });
+const importBarcodesToDatabase = (filePath, callback) => {
+  // 确保使用传递的 filePath 来读取文件
+  console.log("Trying to read Excel file from:", filePath);
 
-  // 读取 Excel 文件
-  const excelFilePath = path.resolve("/tmp", "barcodes.xlsx");
-  console.log("Trying to read Excel file from:", excelFilePath);
-  if (!fs.existsSync(excelFilePath)) {
-    return callback(new Error("Excel file not found at /tmp/barcodes.xlsx"));
+  if (!fs.existsSync(filePath)) {
+    console.error("Excel file not found at", filePath);
+    return callback(new Error("Excel file not found at " + filePath));
   }
-  const workbook = xlsx.readFile("excelFilePath");
+
+  const workbook = xlsx.readFile(filePath);
   const sheet_name_list = workbook.SheetNames;
   const barcodes = xlsx.utils.sheet_to_json(
     workbook.Sheets[sheet_name_list[0]]
   );
 
-  console.log("Data read from Excel file:");
-  console.log(barcodes);
+  console.log("Data read from Excel file:", barcodes);
+
+  // 数据库操作
+  const dbPath = path.resolve("/tmp", "barcodes.db");
+  const db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+      console.error("Error opening database", err);
+      return callback(err);
+    } else {
+      console.log("Database opened successfully at:", dbPath);
+    }
+  });
 
   db.serialize(() => {
-    // 删除现有的 barcodes 表
     db.run("DROP TABLE IF EXISTS barcodes", (err) => {
       if (err) {
         console.error("Error dropping table:", err.message);
@@ -42,30 +44,27 @@ const importBarcodesToDatabase = (callback) => {
       }
     });
 
-    // 创建新的 barcodes 表
     db.run(
       `CREATE TABLE IF NOT EXISTS barcodes (
-      customer_id TEXT, 
-      po_number TEXT, 
-      item_code TEXT, 
-      series_number_start TEXT, 
-      series_number_end TEXT, 
-      item_info TEXT
-    )`,
+        customer_id TEXT, 
+        po_number TEXT, 
+        item_code TEXT, 
+        series_number_start TEXT, 
+        series_number_end TEXT, 
+        item_info TEXT
+      )`,
       (err) => {
         if (err) {
           console.error("Error creating table:", err.message);
         } else {
           console.log("Table 'barcodes' created successfully.");
 
-          // 准备插入数据的语句
           const stmt = db.prepare(
             `INSERT INTO barcodes 
-           (customer_id, po_number, item_code, series_number_start, series_number_end, item_info) 
-           VALUES (?, ?, ?, ?, ?, ?)`
+            (customer_id, po_number, item_code, series_number_start, series_number_end, item_info) 
+            VALUES (?, ?, ?, ?, ?, ?)`
           );
 
-          // 遍历 Excel 文件中的每一行并插入到数据库中
           barcodes.forEach((barcode) => {
             const customerId = barcode["Customer ID"].trim();
             const poNumber = barcode["PO Number"].toString().trim();
@@ -80,7 +79,6 @@ const importBarcodesToDatabase = (callback) => {
               .trim();
             const itemInfo = barcode["Item Info"].trim();
 
-            // 插入到数据库中
             stmt.run(
               customerId,
               poNumber,
@@ -100,15 +98,12 @@ const importBarcodesToDatabase = (callback) => {
             );
           });
 
-          // 结束插入
           stmt.finalize((err) => {
             if (err) {
               console.error("Error finalizing statement:", err.message);
               return callback(err);
             }
             console.log("Statement finalized successfully.");
-
-            // **关闭数据库**
             db.close((err) => {
               if (err) {
                 console.error("Error closing database:", err.message);

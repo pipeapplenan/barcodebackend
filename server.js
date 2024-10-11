@@ -49,6 +49,12 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
   }
   console.log("Uploaded file:", req.file.path);
 
+  // 这里返回上传成功并返回文件路径（包括时间戳）
+  res.status(200).json({
+    message: "文件上传成功",
+    filePath: req.file.path,
+  });
+
   // 将上传文件的路径加入缓存处理
   const cacheFileName = `cache_${getTimeStamp()}.xlsx`;
   // const cacheFilePath = path.join(__dirname, "cache", cacheFileName);
