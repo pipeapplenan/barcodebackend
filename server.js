@@ -8,7 +8,14 @@ const multer = require("multer");
 const fs = require("fs");
 
 const app = express();
-app.use(cors());
+app.use(
+  cors({
+    origin: "https://pipeapplenan.github.io", // 只允许来自这个域名的跨域请求
+    methods: ["GET", "POST"], // 允许的 HTTP 方法
+    allowedHeaders: ["Content-Type"], // 允许的请求头
+  })
+);
+
 app.use(bodyParser.json());
 
 // 获取当前时间并格式化为 YYYYMMDD_HHmmss
@@ -80,14 +87,25 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
 
 // 导入条形码数据的 POST 请求处理
 app.post("/api/import-barcodes", (req, res) => {
-  importBarcodesToDatabase((err, result) => {
+  const { filePath } = req.body; // 从请求中获取 filePath
+
+  if (!filePath) {
+    return res.status(400).json({ message: "文件路径未提供" }); // 如果没有提供文件路径，立即返回
+  }
+
+  // 调用 importBarcodesToDatabase 函数，传入 filePath
+  importBarcodesToDatabase(filePath, (err, result) => {
     if (err) {
       console.error("Error during import:", err.message);
-      return res.status(500).send("Error importing barcodes: " + err.message);
-    } else {
-      console.log("Import successful:", result);
-      return res.status(200).send("Database import successful");
+      // 发生错误时，立即返回错误响应
+      return res
+        .status(500)
+        .json({ message: "Error importing barcodes: " + err.message });
     }
+
+    // 如果没有错误，返回成功响应
+    console.log("Import successful:", result);
+    return res.status(200).json({ message: "Database import successful" });
   });
 });
 
