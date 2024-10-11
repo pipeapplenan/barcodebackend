@@ -8,11 +8,13 @@ const multer = require("multer");
 const fs = require("fs");
 
 const app = express();
+
+// 设置 CORS 以允许来自特定域的请求
 app.use(
   cors({
-    origin: "https://pipeapplenan.github.io", // 只允许来自这个域名的跨域请求
-    methods: ["GET", "POST"], // 允许的 HTTP 方法
-    allowedHeaders: ["Content-Type"], // 允许的请求头
+    origin: ["https://pipeapplenan.github.io", "http://localhost:3000"], // 允许多个来源
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type"],
     optionsSuccessStatus: 204, // 对于预检请求返回204状态码
   })
 );
@@ -34,11 +36,10 @@ const getTimeStamp = () => {
   return `${year}${month}${day}_${hours}${minutes}${seconds}`;
 };
 
-// 配置 multer，将文件保存到 server 目录下
+// 配置 multer，将文件保存到 /tmp 目录下
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    // cb(null, path.join(__dirname)); // 将文件保存到 server 目录
-    cb(null, "/tmp");
+    cb(null, "/tmp"); // 保存文件到 /tmp
   },
   filename: function (req, file, cb) {
     // 生成带有时间戳的文件名
@@ -62,31 +63,26 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
 
   // 将上传文件的路径加入缓存处理
   const cacheFileName = `cache_${getTimeStamp()}.xlsx`;
-  // const cacheFilePath = path.join(__dirname, "cache", cacheFileName);
   const cacheFilePath = path.join("/tmp", cacheFileName); // 保存到 /tmp
 
   // 确保缓存目录存在
-  if (!fs.existsSync(path.join(__dirname, "cache"))) {
-    fs.mkdirSync(path.join(__dirname, "cache"));
+  if (!fs.existsSync("/tmp/cache")) {
+    fs.mkdirSync("/tmp/cache");
   }
 
   // 复制上传的文件到缓存目录，并命名为带时间戳的文件
   fs.copyFile(req.file.path, cacheFilePath, (err) => {
     if (err) {
       console.error("Error caching file:", err);
-      return res.status(500).json({ message: "文件缓存错误" });
     }
     console.log(`File cached successfully as ${cacheFileName}`);
-    res
-      .status(200)
-      .json({ message: "文件上传成功并已缓存", filePath: req.file.path });
   });
-});
 
-// 这里返回上传成功并返回文件路径（包括时间戳）
-res.status(200).json({
-  message: "文件上传成功",
-  filePath: req.file.path,
+  // 返回文件上传成功的响应
+  res.status(200).json({
+    message: "文件上传成功并已缓存",
+    filePath: req.file.path,
+  });
 });
 
 // 导入条形码数据的 POST 请求处理
@@ -94,26 +90,46 @@ app.post("/api/import-barcodes", (req, res) => {
   const { filePath } = req.body; // 从请求中获取 filePath
 
   if (!filePath) {
-    return res.status(400).json({ message: "文件路径未提供" }); // 如果没有提供文件路径，立即返回
+    return res.status(400).json({ message: "文件路径未提供" });
   }
 
-  // 调用 importBarcodesToDatabase 函数，传入 filePath
-  importBarcodesToDatabase(filePath, (err, result) => {
-    if (err) {
-      console.error("Error during import:", err.message);
-      // 发生错误时，立即返回错误响应
-      return res
-        .status(500)
-        .json({ message: "Error importing barcodes: " + err.message });
-    }
+  // 打开数据库
+  const dbPath = path.resolve("/tmp", "barcodes.db");
+  const db = new sqlite3.Database(dbPath);
 
-    // 如果没有错误，返回成功响应
-    console.log("Import successful:", result);
-    return res.status(200).json({ message: "Database import successful" });
-  });
+  // 创建表，如果表不存在
+  db.run(
+    `
+    CREATE TABLE IF NOT EXISTS barcodes (
+      customer_id TEXT, 
+      po_number TEXT, 
+      item_code TEXT, 
+      series_number_start TEXT, 
+      series_number_end TEXT, 
+      item_info TEXT
+    )
+  `,
+    (err) => {
+      if (err) {
+        return res.status(500).json({ message: "创建数据库表时出错" });
+      }
+
+      // 调用导入函数
+      importBarcodesToDatabase(filePath, (err, result) => {
+        if (err) {
+          return res
+            .status(500)
+            .json({ message: "导入条形码数据时出错: " + err.message });
+        }
+
+        // 返回成功响应
+        res.status(200).json({ message: "条形码数据导入成功" });
+      });
+    }
+  );
 });
 
-// 查询数据库中所有条形码数据
+// 查询数据库中所有条形码数据的 GET 请求
 app.get("/api/barcodes", (req, res) => {
   const dbPath = path.resolve("/tmp", "barcodes.db"); // 数据库路径
 
@@ -125,17 +141,18 @@ app.get("/api/barcodes", (req, res) => {
     // 查询所有条形码数据
     db.all("SELECT * FROM barcodes", (err, rows) => {
       if (err) {
-        return res.status(500).json({ message: "数据库查询错误" });
+        return res
+          .status(500)
+          .json({ message: "数据库查询错误: " + err.message });
       }
 
       res.status(200).json(rows); // 返回查询到的所有数据
+      db.close(); // 关闭数据库连接
     });
-
-    db.close(); // 关闭数据库连接
   });
 });
 
-// 处理前端条形码验证的 POST 请求
+// 条形码验证的 POST 请求处理
 app.post("/api/validate-barcode", (req, res) => {
   const { customerId, poNumber, itemCode, serialNumber } = req.body;
 
