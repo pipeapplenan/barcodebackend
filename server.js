@@ -47,7 +47,7 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
   if (!req.file) {
     return res.status(400).send("没有上传文件");
   }
-  console.log("Uploaded file:", req.file);
+  console.log("Uploaded file:", req.file.path);
 
   // 将上传文件的路径加入缓存处理
   const cacheFileName = `cache_${getTimeStamp()}.xlsx`;

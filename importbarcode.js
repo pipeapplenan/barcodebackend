@@ -18,6 +18,7 @@ const importBarcodesToDatabase = (callback) => {
 
   // 读取 Excel 文件
   const excelFilePath = path.resolve("/tmp", "barcodes.xlsx");
+  console.log("Trying to read Excel file from:", excelFilePath);
   if (!fs.existsSync(excelFilePath)) {
     return callback(new Error("Excel file not found at /tmp/barcodes.xlsx"));
   }
