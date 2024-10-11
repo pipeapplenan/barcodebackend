@@ -9,10 +9,7 @@ const { importBarcodesToDatabase } = require("./importbarcode");
 
 // 连接 MongoDB
 const mongoUri = process.env.MONGO_URI;
-mongoose.connect(mongoUri, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
+mongoose.connect(mongoUri);
 
 const BarcodeSchema = new mongoose.Schema({
   customer_id: String,
@@ -23,7 +20,9 @@ const BarcodeSchema = new mongoose.Schema({
   item_info: String,
 });
 
-const Barcode = mongoose.model("Barcode", BarcodeSchema);
+// 避免模型重复定义错误
+const Barcode =
+  mongoose.models.Barcode || mongoose.model("Barcode", BarcodeSchema);
 
 const app = express();
 
