@@ -3,7 +3,7 @@ const path = require("path");
 const xlsx = require("xlsx");
 
 // 确定数据库路径
-const dbPath = path.resolve(__dirname, "barcodes.db");
+const dbPath = path.resolve("/tmp", "barcodes.db");
 console.log("Database path for import:", dbPath);
 
 const importBarcodesToDatabase = (callback) => {
@@ -17,7 +17,8 @@ const importBarcodesToDatabase = (callback) => {
   });
 
   // 读取 Excel 文件
-  const workbook = xlsx.readFile("barcodes.xlsx");
+  const excelFilePath = path.resolve("/tmp", "barcodes.xlsx");
+  const workbook = xlsx.readFile("excelFilePath");
   const sheet_name_list = workbook.SheetNames;
   const barcodes = xlsx.utils.sheet_to_json(
     workbook.Sheets[sheet_name_list[0]]
