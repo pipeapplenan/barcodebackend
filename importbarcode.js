@@ -1,6 +1,7 @@
 const sqlite3 = require("sqlite3").verbose();
 const path = require("path");
 const xlsx = require("xlsx");
+const fs = require("fs");
 
 // 确定数据库路径
 const dbPath = path.resolve("/tmp", "barcodes.db");
