@@ -1,11 +1,29 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
-const sqlite3 = require("sqlite3").verbose();
-const path = require("path");
-const { importBarcodesToDatabase } = require("./importbarcode"); // 导入封装好的导入函数
 const multer = require("multer");
+const path = require("path");
 const fs = require("fs");
+const mongoose = require("mongoose");
+const { importBarcodesToDatabase } = require("./importbarcode");
+
+// 连接 MongoDB
+const mongoUri = process.env.MONGO_URI;
+mongoose.connect(mongoUri, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
+
+const BarcodeSchema = new mongoose.Schema({
+  customer_id: String,
+  po_number: String,
+  item_code: String,
+  series_number_start: String,
+  series_number_end: String,
+  item_info: String,
+});
+
+const Barcode = mongoose.model("Barcode", BarcodeSchema);
 
 const app = express();
 
@@ -15,40 +33,27 @@ app.use(
     origin: ["https://pipeapplenan.github.io", "http://localhost:3000"], // 允许多个来源
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type"],
-    optionsSuccessStatus: 204, // 对于预检请求返回204状态码
+    optionsSuccessStatus: 204,
   })
 );
 
 // 处理所有 OPTIONS 请求的响应
-app.options("*", cors()); // 允许所有的预检请求
+app.options("*", cors());
 
 app.use(bodyParser.json());
 
-// 获取当前时间并格式化为 YYYYMMDD_HHmmss
-const getTimeStamp = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  const hours = String(now.getHours()).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  const seconds = String(now.getSeconds()).padStart(2, "0");
-  return `${year}${month}${day}_${hours}${minutes}${seconds}`;
-};
-
-// 配置 multer，将文件保存到 /tmp 目录下
+// 上传文件时将其存储到 /tmp 目录下
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, "/tmp"); // 保存文件到 /tmp
+    cb(null, "/tmp");
   },
   filename: function (req, file, cb) {
-    // 生成带有时间戳的文件名
-    const timeStamp = getTimeStamp();
+    const timeStamp = new Date().toISOString().replace(/:/g, "-");
     const originalFileName = file.originalname;
     const ext = path.extname(originalFileName);
     const baseName = path.basename(originalFileName, ext);
     const newFileName = `${baseName}_${timeStamp}${ext}`;
-    cb(null, newFileName); // 保存带有时间戳的文件名
+    cb(null, newFileName);
   },
 });
 
@@ -61,16 +66,12 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
   }
   console.log("Uploaded file:", req.file.path);
 
-  // 将上传文件的路径加入缓存处理
-  const cacheFileName = `cache_${getTimeStamp()}.xlsx`;
-  const cacheFilePath = path.join("/tmp", cacheFileName); // 保存到 /tmp
+  // 缓存文件路径
+  const cacheFileName = `cache_${new Date()
+    .toISOString()
+    .replace(/:/g, "-")}.xlsx`;
+  const cacheFilePath = path.join("/tmp", cacheFileName);
 
-  // 确保缓存目录存在
-  if (!fs.existsSync("/tmp/cache")) {
-    fs.mkdirSync("/tmp/cache");
-  }
-
-  // 复制上传的文件到缓存目录，并命名为带时间戳的文件
   fs.copyFile(req.file.path, cacheFilePath, (err) => {
     if (err) {
       console.error("Error caching file:", err);
@@ -78,7 +79,6 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
     console.log(`File cached successfully as ${cacheFileName}`);
   });
 
-  // 返回文件上传成功的响应
   res.status(200).json({
     message: "文件上传成功并已缓存",
     filePath: req.file.path,
@@ -86,117 +86,52 @@ app.post("/api/upload", upload.single("file"), (req, res) => {
 });
 
 // 导入条形码数据的 POST 请求处理
-app.post("/api/import-barcodes", (req, res) => {
-  const { filePath } = req.body; // 从请求中获取 filePath
-
+app.post("/api/import-barcodes", async (req, res) => {
+  const { filePath } = req.body;
   if (!filePath) {
     return res.status(400).json({ message: "文件路径未提供" });
   }
 
-  // 打开数据库
-  const dbPath = path.resolve("/tmp", "barcodes.db");
-  const db = new sqlite3.Database(dbPath);
-
-  // 创建表，如果表不存在
-  db.run(
-    `
-    CREATE TABLE IF NOT EXISTS barcodes (
-      customer_id TEXT, 
-      po_number TEXT, 
-      item_code TEXT, 
-      series_number_start TEXT, 
-      series_number_end TEXT, 
-      item_info TEXT
-    )
-  `,
-    (err) => {
-      if (err) {
-        return res.status(500).json({ message: "创建数据库表时出错" });
-      }
-
-      // 调用导入函数
-      importBarcodesToDatabase(filePath, (err, result) => {
-        if (err) {
-          return res
-            .status(500)
-            .json({ message: "导入条形码数据时出错: " + err.message });
-        }
-
-        // 返回成功响应
-        res.status(200).json({ message: "条形码数据导入成功" });
-      });
-    }
-  );
+  try {
+    await importBarcodesToDatabase(filePath);
+    res.status(200).json({ message: "条形码数据导入成功" });
+  } catch (error) {
+    res.status(500).json({ message: "导入条形码数据时出错: " + error.message });
+  }
 });
 
-// 查询数据库中所有条形码数据的 GET 请求
-app.get("/api/barcodes", (req, res) => {
-  const dbPath = path.resolve("/tmp", "barcodes.db"); // 数据库路径
-
-  const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-      return res.status(500).json({ message: "数据库连接错误" });
-    }
-
-    // 查询所有条形码数据
-    db.all("SELECT * FROM barcodes", (err, rows) => {
-      if (err) {
-        return res
-          .status(500)
-          .json({ message: "数据库查询错误: " + err.message });
-      }
-
-      res.status(200).json(rows); // 返回查询到的所有数据
-      db.close(); // 关闭数据库连接
-    });
-  });
+// 查询所有条形码数据
+app.get("/api/barcodes", async (req, res) => {
+  try {
+    const barcodes = await Barcode.find();
+    res.status(200).json(barcodes);
+  } catch (error) {
+    res.status(500).json({ message: "数据库查询错误" });
+  }
 });
 
-// 条形码验证的 POST 请求处理
-app.post("/api/validate-barcode", (req, res) => {
+// 条形码验证的 POST 请求
+app.post("/api/validate-barcode", async (req, res) => {
   const { customerId, poNumber, itemCode, serialNumber } = req.body;
+  const serialNum = serialNumber.toString().padStart(4, "0");
 
-  // 确保 serialNumber 是字符串，并且补齐前导零为4位
-  const serialNum =
-    serialNumber.length === 4
-      ? serialNumber
-      : serialNumber.toString().padStart(4, "0");
+  try {
+    const barcode = await Barcode.findOne({
+      customer_id: customerId,
+      po_number: poNumber,
+      item_code: itemCode,
+      series_number_start: { $lte: serialNum },
+      series_number_end: { $gte: serialNum },
+    });
 
-  // 打开数据库连接
-  const dbPath = path.resolve("/tmp", "barcodes.db");
-  const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-      console.error("Error opening database", err);
-      return res.status(500).json({ message: "数据库连接错误" });
+    if (barcode) {
+      res.json({ message: `验证成功，物品信息: ${barcode.item_info}` });
+    } else {
+      res.json({ message: "条形码不存在" });
     }
-    console.log("Database opened successfully for validation.");
-
-    // 从 SQLite 数据库中查询条形码区间
-    db.get(
-      `SELECT * FROM barcodes 
-       WHERE customer_id = ? COLLATE NOCASE
-       AND po_number = ? COLLATE NOCASE
-       AND item_code = ? COLLATE NOCASE
-       AND ? >= series_number_start
-       AND ? <= series_number_end`,
-      [customerId, poNumber, itemCode, serialNum, serialNum],
-      (err, row) => {
-        if (err) {
-          console.error("Error querying database", err.message);
-          db.close(); // 确保在查询后关闭数据库
-          return res.status(500).json({ message: "数据库查询错误" });
-        } else if (row) {
-          console.log("Query result: ", row);
-          db.close(); // 查询完成后关闭数据库
-          return res.json({ message: `验证成功，物品信息: ${row.item_info}` });
-        } else {
-          console.log("No matching record found.");
-          db.close(); // 查询后关闭数据库
-          return res.json({ message: "条形码不存在" });
-        }
-      }
-    );
-  });
+  } catch (error) {
+    res.status(500).json({ message: "数据库查询错误" });
+  }
 });
 
 // 启动服务器并监听端口
