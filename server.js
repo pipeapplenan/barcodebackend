@@ -109,7 +109,7 @@ app.post("/api/import-barcodes", (req, res) => {
   });
 });
 
-//查看数据库中有多少数据
+// 查询数据库中所有条形码数据
 app.get("/api/barcodes", (req, res) => {
   const dbPath = path.resolve("/tmp", "barcodes.db"); // 数据库路径
 
