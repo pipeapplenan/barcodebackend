@@ -29,7 +29,7 @@ const app = express();
 // 设置 CORS 以允许来自特定域的请求
 app.use(
   cors({
-    origin: ["https://pipeapplenan.github.io", "http://localhost:3000", "https://www.saitys.com"], // 允许多个来源
+    origin: ["https://pipeapplenan.github.io", "http://localhost:3000", "https://barcodetest.saitys.com"], // 允许多个来源
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type"],
     optionsSuccessStatus: 204,
