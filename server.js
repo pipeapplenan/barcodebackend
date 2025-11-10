@@ -41,48 +41,43 @@ app.options("*", cors());
 
 app.use(bodyParser.json());
 
-// 上传文件时将其存储到 /tmp 目录下
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "/tmp");
-  },
-  filename: function (req, file, cb) {
-    const timeStamp = new Date().toISOString().replace(/:/g, "-");
-    const originalFileName = file.originalname;
-    const ext = path.extname(originalFileName);
-    const baseName = path.basename(originalFileName, ext);
-    const newFileName = `${baseName}_${timeStamp}${ext}`;
-    cb(null, newFileName);
-  },
-});
+// ✅ 改用内存存储（避免写入 /tmp）
+const upload = multer({ storage: multer.memoryStorage() });
 
-const upload = multer({ storage: storage });
+// ✅ 修改上传接口逻辑
+app.post("/api/upload", upload.single("file"), async (req, res) => {
+  console.log("📦 [UPLOAD] 请求收到 /api/upload");
+  console.log("req.file =", req.file && { name: req.file.originalname, size: req.file.size });
 
-// 文件上传的 POST 请求处理
-app.post("/api/upload", upload.single("file"), (req, res) => {
   if (!req.file) {
-    return res.status(400).send("没有上传文件");
+    return res.status(400).json({ message: "没有上传文件" });
   }
-  console.log("Uploaded file:", req.file.path);
 
-  // 缓存文件路径
-  const cacheFileName = `cache_${new Date()
-    .toISOString()
-    .replace(/:/g, "-")}.xlsx`;
-  const cacheFilePath = path.join("/tmp", cacheFileName);
+  // 检查空文件
+  if (req.file.size === 0) {
+    return res.status(400).json({ message: "上传文件为空" });
+  }
 
-  fs.copyFile(req.file.path, cacheFilePath, (err) => {
-    if (err) {
-      console.error("Error caching file:", err);
-    }
-    console.log(`File cached successfully as ${cacheFileName}`);
-  });
+  try {
+    // ✅ 在内存中创建缓存文件路径（仅在同次函数执行内有效）
+    const cacheFileName = `cache_${new Date().toISOString().replace(/:/g, "-")}.xlsx`;
+    const cacheFilePath = path.join("/tmp", cacheFileName);
 
-  res.status(200).json({
-    message: "文件上传成功并已缓存",
-    filePath: req.file.path,
-  });
+    // ✅ 写入 /tmp 同步（几 KB 无压力）
+    fs.writeFileSync(cacheFilePath, req.file.buffer);
+    console.log(`文件已缓存到: ${cacheFilePath}`);
+
+    // 返回路径
+    res.status(200).json({
+      message: "文件上传成功并已缓存",
+      filePath: cacheFilePath,
+    });
+  } catch (err) {
+    console.error("写入缓存失败:", err);
+    res.status(500).json({ message: "文件缓存失败", error: err.message });
+  }
 });
+
 
 // 导入条形码数据的 POST 请求处理
 app.post("/api/import-barcodes", async (req, res) => {
