@@ -41,42 +41,47 @@ app.options("*", cors());
 
 app.use(bodyParser.json());
 
-// ✅ 改用内存存储（避免写入 /tmp）
-const upload = multer({ storage: multer.memoryStorage() });
+// 上传文件时将其存储到 /tmp 目录下
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, "/tmp");
+  },
+  filename: function (req, file, cb) {
+    const timeStamp = new Date().toISOString().replace(/:/g, "-");
+    const originalFileName = file.originalname;
+    const ext = path.extname(originalFileName);
+    const baseName = path.basename(originalFileName, ext);
+    const newFileName = `${baseName}_${timeStamp}${ext}`;
+    cb(null, newFileName);
+  },
+});
 
-// ✅ 修改上传接口逻辑
-app.post("/api/upload", upload.single("file"), async (req, res) => {
-  console.log("📦 [UPLOAD] 请求收到 /api/upload");
-  console.log("req.file =", req.file && { name: req.file.originalname, size: req.file.size });
+const upload = multer({ storage: storage });
 
+// 文件上传的 POST 请求处理
+app.post("/api/upload", upload.single("file"), (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ message: "没有上传文件" });
+    return res.status(400).send("没有上传文件");
   }
+  console.log("Uploaded file:", req.file.path);
 
-  // 检查空文件
-  if (req.file.size === 0) {
-    return res.status(400).json({ message: "上传文件为空" });
-  }
+  // 缓存文件路径
+  const cacheFileName = `cache_${new Date()
+    .toISOString()
+    .replace(/:/g, "-")}.xlsx`;
+  const cacheFilePath = path.join("/tmp", cacheFileName);
 
-  try {
-    // ✅ 直接在内存中解析 Excel 文件，不写磁盘
-    const xlsx = require("xlsx");
-    const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
-    const sheetName = workbook.SheetNames[0];
-    const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+  fs.copyFile(req.file.path, cacheFilePath, (err) => {
+    if (err) {
+      console.error("Error caching file:", err);
+    }
+    console.log(`File cached successfully as ${cacheFileName}`);
+  });
 
-    console.log(`✅ 文件解析成功: ${sheetName} 共 ${data.length} 行`);
-
-    // 这里只返回解析结果摘要（前几行），方便确认
-    res.status(200).json({
-      message: "文件上传成功并解析完成",
-      rowCount: data.length,
-      preview: data.slice(0, 3), // 仅预览前三行
-    });
-  } catch (err) {
-    console.error("文件解析失败:", err);
-    res.status(500).json({ message: "文件解析失败", error: err.message });
-  }
+  res.status(200).json({
+    message: "文件上传成功并已缓存",
+    filePath: req.file.path,
+  });
 });
 
 
