@@ -59,22 +59,23 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
   }
 
   try {
-    // ✅ 在内存中创建缓存文件路径（仅在同次函数执行内有效）
-    const cacheFileName = `cache_${new Date().toISOString().replace(/:/g, "-")}.xlsx`;
-    const cacheFilePath = path.join("/tmp", cacheFileName);
+    // ✅ 直接在内存中解析 Excel 文件，不写磁盘
+    const xlsx = require("xlsx");
+    const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
+    const sheetName = workbook.SheetNames[0];
+    const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-    // ✅ 写入 /tmp 同步（几 KB 无压力）
-    fs.writeFileSync(cacheFilePath, req.file.buffer);
-    console.log(`文件已缓存到: ${cacheFilePath}`);
+    console.log(`✅ 文件解析成功: ${sheetName} 共 ${data.length} 行`);
 
-    // 返回路径
+    // 这里只返回解析结果摘要（前几行），方便确认
     res.status(200).json({
-      message: "文件上传成功并已缓存",
-      filePath: cacheFilePath,
+      message: "文件上传成功并解析完成",
+      rowCount: data.length,
+      preview: data.slice(0, 3), // 仅预览前三行
     });
   } catch (err) {
-    console.error("写入缓存失败:", err);
-    res.status(500).json({ message: "文件缓存失败", error: err.message });
+    console.error("文件解析失败:", err);
+    res.status(500).json({ message: "文件解析失败", error: err.message });
   }
 });
 
